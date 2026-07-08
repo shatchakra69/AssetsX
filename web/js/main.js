@@ -8,7 +8,16 @@ import { showToast } from './utils.js';
 import { readCache, writeCache } from './cache.js';
 import { getCurrency, setCurrency, CURRENCY_CODES } from './currency.js';
 import { getTheme, setTheme } from './theme.js';
-import { signUp, signIn, sendVerificationEmail, lookupUser, getStoredAuth, getValidIdToken } from './firebaseAuth.js';
+import {
+  signUp,
+  signIn,
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+  finishSocialSignIn,
+  lookupUser,
+  getStoredAuth,
+  getValidIdToken,
+} from './firebaseAuth.js';
 import { getUserDoc, createUserDoc } from './db.js';
 import { loadPortfolio } from './trade.js';
 import {
@@ -78,14 +87,66 @@ function showFormNotice(message) {
   }
 }
 
-// "Forgot password?" is a demo button — there is no real backend to send an email from
+// "Forgot password?" — sends a real Firebase password-reset email to the
+// address typed into the email field.
 function bindForgotPassword() {
   const forgotButton = document.querySelector('[data-action="forgot"]');
   if (!forgotButton) return;
 
-  forgotButton.addEventListener('click', () => {
-    showToast('Password reset is not available in this demo.');
+  forgotButton.addEventListener('click', async () => {
+    clearFormError();
+
+    const email = document.querySelector('#email')?.value.trim() || '';
+    if (!email || !email.includes('@')) {
+      showFormError('Enter your email address above first, then click "Forgot password?".');
+      return;
+    }
+
+    forgotButton.disabled = true;
+    try {
+      await sendPasswordResetEmail(email);
+      showFormNotice(`Password reset email sent to ${email} — check your inbox.`);
+    } catch (error) {
+      showFormError(error.message);
+    } finally {
+      forgotButton.disabled = false;
+    }
   });
+}
+
+// Complete a Google/Apple sign-in after the provider redirects back to this
+// page (see startSocialSignIn in firebaseAuth.js). No-op on a normal load.
+async function handleSocialRedirect() {
+  if (page !== 'signin' && page !== 'signup') return;
+
+  let result;
+  try {
+    result = await finishSocialSignIn();
+  } catch (error) {
+    showFormError(error.message);
+    return;
+  }
+  if (!result) return;
+
+  showFormNotice('Signing you in…');
+
+  // First social sign-in on this account — create the same Firestore profile
+  // document the email/password sign-up flow creates. A failure here isn't
+  // fatal: the account exists, the profile just falls back to defaults.
+  try {
+    const existing = await getUserDoc(result.uid);
+    if (!existing) {
+      await createUserDoc(result.uid, {
+        fullname: result.fullname || result.email.split('@')[0],
+        email: result.email,
+        watchlist: [],
+      });
+    }
+  } catch (error) {
+    console.warn('Could not create profile after social sign-in:', error);
+  }
+
+  location.replace('home.html');
 }
 
 // Handle the sign-in and sign-up forms.
@@ -344,6 +405,9 @@ function bindPortfolioSync() {
 // Start the app — this runs as soon as the page loads
 async function initApp() {
   checkAuthState();
+  // Must run before anything else on the auth pages — if this load is a
+  // Google/Apple OAuth callback it stores the tokens and leaves for home.html
+  await handleSocialRedirect();
   bindAuthFormSubmit();
   bindForgotPassword();
   injectCurrencySelector();

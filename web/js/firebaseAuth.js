@@ -20,8 +20,12 @@ const ERROR_MESSAGES = {
   EMAIL_NOT_FOUND: 'No account found with that email.',
   INVALID_PASSWORD: 'Incorrect password.',
   INVALID_LOGIN_CREDENTIALS: 'Incorrect email or password.',
+  INVALID_EMAIL: 'Please enter a valid email address.',
   WEAK_PASSWORD: 'Password should be at least 6 characters.',
   TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many attempts. Please try again later.',
+  USER_DISABLED: 'This account has been disabled.',
+  OPERATION_NOT_ALLOWED: 'That sign-in method is not enabled for this Firebase project yet (Firebase console → Authentication → Sign-in method).',
+  INVALID_IDP_RESPONSE: 'The sign-in provider returned an invalid response. Please try again.',
 };
 
 function friendlyError(errorBody) {
@@ -82,6 +86,70 @@ export async function signUp(email, password) {
 export async function signIn(email, password) {
   const data = await identityRequest('signInWithPassword', { email, password, returnSecureToken: true });
   return storeAuth(data);
+}
+
+// ── Social sign-in (Google / Apple) ─────────────────────────────────────────
+// Same REST-only approach as everything else in this file. createAuthUri
+// returns the provider's own OAuth page, the provider redirects back to the
+// page that started the flow, and signInWithIdp exchanges that redirect for
+// Firebase tokens. No SDK and no provider client id in the code — Firebase
+// manages the OAuth app for each provider enabled in the console.
+
+const OAUTH_SESSION_KEY = 'assetsx_oauth_session';
+
+// Kick off the provider's OAuth flow by leaving the page. The sessionId has
+// to survive the round trip, so it waits in sessionStorage until the
+// provider sends the user back and finishSocialSignIn() picks it up.
+export async function startSocialSignIn(providerId) {
+  const data = await identityRequest('createAuthUri', {
+    providerId,
+    // Firebase checks this against the project's authorized domains
+    // (localhost and the production domain are both authorized).
+    continueUri: `${location.origin}${location.pathname}`,
+    oauthScope: 'email profile',
+  });
+  sessionStorage.setItem(OAUTH_SESSION_KEY, JSON.stringify({ sessionId: data.sessionId }));
+  location.href = data.authUri;
+}
+
+// Complete a social sign-in after the provider redirects back. Returns null
+// on a normal page load (no OAuth round trip in progress), otherwise stores
+// the tokens and returns what the caller needs to set up a first-time profile.
+export async function finishSocialSignIn() {
+  const pending = sessionStorage.getItem(OAUTH_SESSION_KEY);
+  if (!pending) return null;
+
+  const params = new URLSearchParams(location.search);
+  if (!params.has('code')) {
+    // The user backed out of the provider's consent screen
+    if (params.has('error')) {
+      sessionStorage.removeItem(OAUTH_SESSION_KEY);
+      throw new Error('Sign-in was cancelled.');
+    }
+    return null;
+  }
+
+  sessionStorage.removeItem(OAUTH_SESSION_KEY);
+  const { sessionId } = JSON.parse(pending);
+  const data = await identityRequest('signInWithIdp', {
+    requestUri: location.href,
+    sessionId,
+    returnSecureToken: true,
+  });
+  storeAuth(data);
+
+  return {
+    uid: data.localId,
+    email: data.email || '',
+    fullname: data.displayName || '',
+    isNewUser: !!data.isNewUser,
+  };
+}
+
+// Email Firebase's password-reset link to the given address. Like the
+// verification email, Google's own infrastructure sends it.
+export function sendPasswordResetEmail(email) {
+  return identityRequest('sendOobCode', { requestType: 'PASSWORD_RESET', email });
 }
 
 // Email Firebase's verification link to the signed-in user. Google's own

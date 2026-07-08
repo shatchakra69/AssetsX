@@ -11,8 +11,8 @@ A responsive stock market web app, the web half of the AssetsX Semester 4 Fronte
 | Markup | HTML5 |
 | Styling | CSS3 — mobile-first, custom dark theme |
 | Scripting | Vanilla JavaScript (ES modules) |
-| UI Framework | Bootstrap 5.3 (CDN) — required by the module spec |
-| Charts | Chart.js (CDN) — required by the module spec |
+| UI Framework | Bootstrap 5.3.8 (CDN) — required by the module spec |
+| Charts | Chart.js 4.5.1 (CDN) — required by the module spec |
 | Auth | Real accounts with email verification, via Firebase's Identity Toolkit REST API — called with plain `fetch()` in JS (`js/firebaseAuth.js`) and PHP's `curl` extension server-side (`firebase_helper.php`, used by `login.php`/`register.php`). **No Firebase SDK is loaded anywhere** — no `<script src="firebase...">`, no npm/Composer package — this is the same hand-built request/response pattern already used for the Finnhub and ipapi.co calls in `js/api.js`. See "Database/Auth backend" below for why this satisfies the module's "vanilla JS/PHP only" rule. |
 | Database | Firestore, also REST-only (`js/db.js`) — stores user profiles, per-user watchlists, real per-account portfolio holdings, and Pro-plan order records. |
 | Market Data | Finnhub Stock API — real-time quotes, candles, news, company profiles |
@@ -52,6 +52,8 @@ A responsive stock market web app, the web half of the AssetsX Semester 4 Fronte
 - **Currency switching** — USD / EUR / GBP / JPY selector in the top bar; preference persists in localStorage
 - **Geolocation header** — city and country shown in the subtitle via ipapi.co
 - **Real accounts with email verification** — sign-up creates a real Firebase account and emails a verification link (Google's own infrastructure sends it — no SMTP server or email API key needed); a banner on protected pages prompts unverified users to check their inbox or resend the link
+- **Google and Apple sign-in** — the social buttons run a real OAuth flow through Identity Toolkit's `createAuthUri`/`signInWithIdp` REST endpoints (still no SDK); first-time social users get the same Firestore profile as email sign-ups. Requires the provider to be enabled in the Firebase console — see setup below
+- **Password reset** — "Forgot password?" sends a real Firebase reset email to the address in the email field
 - **Per-user watchlist** — add/remove symbols from the Markets table, the stock detail page, or the home dashboard widget; persisted server-side in Firestore (not just localStorage), so it follows the account across devices. Free accounts are capped at 5 symbols, Pro accounts are unlimited
 - **Pro plan checkout** — a simulated cart/checkout for the Pro upgrade: generates a session id, writes an order record to Firestore, and flips the account's plan, unlocking the unlimited watchlist
 - **PHP authentication** — login.php / register.php call the same Firebase REST endpoints server-side (via `firebase_helper.php`) that main.js calls client-side, so the PHP path is genuinely functional, not just a stub; main.js mirrors the same logic in JavaScript since static `.html` pages can't read a PHP session
@@ -182,3 +184,4 @@ Firestore/Identity Toolkit are used here purely as a *hosted database + auth RES
    }
    ```
 3. Copy the **Web API key** and **Project ID** from Project settings → General → Your apps, and paste them into `FIREBASE_CONFIG` in `js/config.js` and `FIREBASE_API_KEY`/`FIREBASE_PROJECT_ID` in `firebase_helper.php`.
+4. To activate the **Google** button on the auth pages, enable **Authentication → Sign-in method → Google**. No code changes needed — the app uses the `createAuthUri`/`signInWithIdp` REST flow, so Firebase manages the OAuth client for you. The **Apple** button works the same way but Apple requires a paid Apple Developer account to configure the provider; until a provider is enabled its button explains exactly that instead of failing silently.

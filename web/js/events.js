@@ -6,7 +6,7 @@ import { fetchStockCandles, getRangeWindow } from './api.js';
 import { initStockChart, showChartSkeleton } from './charts.js';
 import { appState } from './state.js';
 import { renderWatchlist, renderProPlanStatus } from './pages.js';
-import { clearAuth } from './firebaseAuth.js';
+import { clearAuth, startSocialSignIn } from './firebaseAuth.js';
 import { addToWatchlist, removeFromWatchlist, createOrder, updateUserPlan } from './db.js';
 import { FREE_WATCHLIST_LIMIT, PROFILE_CACHE_KEY, PORTFOLIO_CACHE_KEY } from './config.js';
 import { writeCache, clearCache } from './cache.js';
@@ -76,11 +76,13 @@ function handleAction(button) {
       break;
 
     case "social-google":
-      showToast("Google sign in is a demo button.");
+      // Leaves the page for Google's consent screen; main.js's
+      // handleSocialRedirect() finishes the sign-in when Google sends us back
+      startSocialSignIn('google.com').catch(error => showToast(error.message));
       break;
 
     case "social-apple":
-      showToast("Apple sign in is a demo button.");
+      startSocialSignIn('apple.com').catch(error => showToast(error.message));
       break;
 
     case "pro-trial":

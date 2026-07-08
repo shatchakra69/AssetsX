@@ -19,7 +19,7 @@ A stock market tracking platform built as a group project for the Semester 4 **F
 - HTML5, CSS3 (mobile first, custom dark and light themes)
 - Vanilla JavaScript with ES modules, no frameworks
 - PHP for server side auth (login, register, sessions)
-- Bootstrap 5.3 and Chart.js
+- Bootstrap 5.3.8 and Chart.js 4.5.1 (both pinned to the latest releases)
 - Firebase Authentication and Firestore, called through their REST APIs with plain `fetch()` and PHP cURL, no Firebase SDK anywhere
 - Finnhub Stock API for real time quotes, candles and news
 - ipapi.co for geolocation shown in the header
